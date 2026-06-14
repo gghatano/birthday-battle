@@ -362,7 +362,8 @@ function createLocalAdapter() {
         }
       };
     },
-    serverTimestamp() { return Date.now(); }  // 同一マシン=時刻ズレなし
+    serverTimestamp() { return Date.now(); },  // 同一マシン=時刻ズレなし
+    now() { return Date.now(); }               // 比較用の現在時刻 (server同期)
   };
 }
 
@@ -378,6 +379,10 @@ function createFirebaseAdapter() {
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
   const ref = (path) => db.ref(path);
+  // サーバ時刻オフセットを購読し、now() を server 同期にする (review C3)。
+  // これにより endsAt / lastSeen 比較が端末のローカル時計ズレに影響されない。
+  let _serverOffset = 0;
+  db.ref('.info/serverTimeOffset').on('value', (s) => { _serverOffset = s.val() || 0; });
   return {
     name: 'firebase',
     async get(path) { const snap = await ref(path).once('value'); return snap.val(); },
@@ -400,7 +405,8 @@ function createFirebaseAdapter() {
         cancel: () => od.cancel()
       };
     },
-    serverTimestamp() { return firebase.database.ServerValue.TIMESTAMP; }
+    serverTimestamp() { return firebase.database.ServerValue.TIMESTAMP; },
+    now() { return Date.now() + _serverOffset; }  // server 同期した現在時刻
   };
 }
 
@@ -560,22 +566,38 @@ async function createRoom(name) {
 
 async function joinRoom(name, code) {
   code = (code || '').toUpperCase().trim();
-  const room = await DB.get('rooms/' + code);
-  if (!room) return { error: 'ルームが見つかりませんでした' };
-  if (room.status !== 'waiting') return { error: 'このルームは既にゲーム中です' };
-  const playerCount = room.players ? Object.keys(room.players).length : 0;
-  if (playerCount >= MAX_PLAYERS) return { error: 'ルームが満員です（最大' + MAX_PLAYERS + '人）' };
-
   const playerID = Session.ensurePlayerID();
   Session.name = name;
   const now = DB.serverTimestamp();
-  // 既存プレイヤー (リロード復帰) なら名前/接続のみ更新、新規なら追加
-  await DB.update('rooms/' + code + '/players/' + playerID, {
-    name, connected: true, lastSeen: now,
-    joinedAt: (room.players && room.players[playerID]) ? room.players[playerID].joinedAt : now,
-    score: (room.players && room.players[playerID]) ? room.players[playerID].score : 0,
-    characterReady: (room.players && room.players[playerID]) ? !!room.players[playerID].characterReady : false
+
+  // 参加判定と追加を「単一の transaction」で原子的に行う (review M3)。
+  // 事前 read→write の TOCTOU で 11 人目が滑り込むのを防ぐ。
+  // 満員判定は connected な人数で行い、切断者の残留で不必要に弾かない。
+  let failReason = null;
+  const res = await DB.transaction('rooms/' + code, (room) => {
+    failReason = null;
+    if (!room) { failReason = 'ルームが見つかりませんでした'; return undefined; }
+    const existing = room.players && room.players[playerID];
+    if (room.status !== 'waiting' && !existing) {
+      failReason = 'このルームは既にゲーム中です'; return undefined;
+    }
+    const players = room.players || {};
+    const connectedCount = Object.values(players).filter(p => p && p.connected).length;
+    if (!existing && connectedCount >= MAX_PLAYERS) {
+      failReason = 'ルームが満員です（最大' + MAX_PLAYERS + '人）'; return undefined;
+    }
+    players[playerID] = {
+      name, connected: true, lastSeen: now,
+      joinedAt: existing ? existing.joinedAt : now,
+      score: existing ? (existing.score || 0) : 0,
+      characterReady: existing ? !!existing.characterReady : false,
+      character: existing ? (existing.character || null) : null
+    };
+    room.players = players;
+    return room;
   });
+
+  if (!res.committed) return { error: failReason || '参加できませんでした' };
   Session.roomCode = code;
   enterRoom(code);
   return { ok: true };
@@ -691,7 +713,7 @@ function onRoomUpdate(room) {
 let _electing = false;
 async function electHostIfNeeded(room) {
   if (_electing || !room) return;
-  const now = Date.now();
+  const now = DB.now();
   // 健在 = 明示切断でなく、かつ lastSeen が新しい (クラッシュ=pagehide無し にも対応)
   const fresh = (p) => p && p.connected !== false && p.lastSeen && (now - p.lastSeen) <= STALE_MS;
   const hostP = room.players && room.players[room.host];
@@ -734,7 +756,7 @@ async function hostReconcile(room) {
 
 // ハートビートが古いプレイヤーを connected=false に (§2.3, R-07)
 async function checkStalePlayers(room) {
-  const now = Date.now();
+  const now = DB.now();
   const updates = {};
   for (const [id, p] of Object.entries(room.players || {})) {
     if (p.connected && p.lastSeen && (now - p.lastSeen) > STALE_MS) {
@@ -774,7 +796,7 @@ async function maybeTally(room) {
   const conn = connectedPlayers(room);
   if (conn.length < 2) return;
   const votes = round.votes || {};
-  const now = Date.now();
+  const now = DB.now();
   const timedOut = round.endsAt && now >= round.endsAt;
   const allVoted = conn.every(([id]) => votes[id]);
 
@@ -828,22 +850,15 @@ async function hostSetTheme(theme) {
   if (!isHost()) return;
   const room = UI.room;
   const rk = roundKey(room.currentRound);
-  const endsAt = DB.serverTimestamp();
-  // serverTimestamp は書込後に解決された数値を読む設計 (§2.4-3)。
-  // LocalAdapter は数値なので即計算可。Firebase 用に endsAt は別途読み直す。
+  // endsAt は server 同期した now() から数値で確定 (§2.4-3, §5.3 / review C2)。
+  // sentinel の算術を避け、全クライアントが DB.now() 基準で残秒を一致計算できる。
+  const endsAt = DB.now() + ROUND_SECONDS * 1000;
   await DB.update('rooms/' + UI.roomCode, {
     currentTheme: theme,
     status: 'voting',
     ['rounds/' + rk + '/theme']: theme,
-    ['rounds/' + rk + '/endsAt']: resolveEndsAt(endsAt)
+    ['rounds/' + rk + '/endsAt']: endsAt
   });
-}
-
-// endsAt 解決: ローカルは数値 + 60s。Firebase は書込後に読む簡易対応。
-function resolveEndsAt(ts) {
-  if (typeof ts === 'number') return ts + ROUND_SECONDS * 1000;
-  // Firebase sentinel の場合: 概算で現在時刻 + 60s (移行時は §5.3 に従い読み直し推奨)
-  return Date.now() + ROUND_SECONDS * 1000;
 }
 
 async function hostNextRound() {
@@ -1232,7 +1247,7 @@ function renderVoting() {
   const myVote = votes[Session.playerID];
 
   // 残り時間
-  const remain = round.endsAt ? Math.max(0, Math.ceil((round.endsAt - Date.now()) / 1000)) : ROUND_SECONDS;
+  const remain = round.endsAt ? Math.max(0, Math.ceil((round.endsAt - DB.now()) / 1000)) : ROUND_SECONDS;
 
   // 投票先 = 自分以外のプレイヤー (V-01)
   const targets = allPlayers(room).filter(([id, p]) => id !== Session.playerID && p.character);

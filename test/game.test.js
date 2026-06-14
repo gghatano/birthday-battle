@@ -238,6 +238,37 @@ function resultOf(room, id) { return (room.rounds.r1.results || {})[id] || { vot
     check('R-09', '満員(10人)で11人目を拒否', res.error && /満員/.test(res.error));
   }
 
+  // R-02 正しいコードで参加 (transaction 経由で追加)
+  {
+    DB.set('rooms/JOIN1', { host: 'h', status: 'waiting', players: { h: { name: 'h', connected: true, joinedAt: 1, score: 0 } } });
+    Session.playerID = 'newcomer';
+    const res = await BB.rooms.joinRoom('Hanako', 'JOIN1');
+    const room = DB.get('rooms/JOIN1');
+    check('R-02', '正しいコードで参加し追加される', res.ok && room.players.newcomer && room.players.newcomer.name === 'Hanako');
+  }
+
+  // R-09b 満員判定は connected 人数で行う (切断者は枠を占有しない)
+  {
+    const players = {};
+    for (let i = 0; i < 10; i++) players['p' + i] = { name: 'p' + i, connected: i < 4, joinedAt: i }; // 4人だけ接続
+    DB.set('rooms/CONN10', { host: 'p0', status: 'waiting', players });
+    Session.playerID = 'fresh';
+    const res = await BB.rooms.joinRoom('New', 'CONN10');
+    check('R-09b', '切断者がいても connected<10 なら参加可', res.ok === true);
+  }
+
+  // R-08 リロード復帰: 既存プレイヤーは joinedAt / score を保持
+  {
+    DB.set('rooms/REJOIN', {
+      host: 'P', status: 'waiting',
+      players: { P: { name: 'P', connected: false, joinedAt: 100, score: 3, characterReady: true } }
+    });
+    Session.playerID = 'P';
+    const res = await BB.rooms.joinRoom('P', 'REJOIN');
+    const p = DB.get('rooms/REJOIN').players.P;
+    check('R-08', 'リロード復帰で joinedAt/score 保持・再接続', res.ok && p.joinedAt === 100 && p.score === 3 && p.connected === true);
+  }
+
   console.log(`\n結果: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })();
