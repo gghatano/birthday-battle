@@ -64,10 +64,28 @@ round キーは RTDB の配列化を避けるため `r1`, `r2`, … のプレフ
 - 全員ばらけて最多 = 1票 のときは加点しない
 - `pointAwarded` フラグで集計の冪等性を担保
 
-## 手動テスト
+## テスト
 
-仕様書 §11 のテスト計画に対応。`window.BB`（`DB` / `Wiki` / `UI` / `Session`）をコンソールから操作して
-Sync Adapter テスト（S-01〜08）等を確認できます。
+### 自動テスト（Node・依存ゼロ）
+
+`index.html` の `<script>` を抽出し、最小モック下で実コードを評価して検証します。
+
+```bash
+npm test          # adapter + game をまとめて実行
+# 個別:
+node test/adapter.test.js   # Sync Adapter 契約 (S-01〜07 + transaction)
+node test/game.test.js      # 集計・加点・冪等性 (V-03〜08) / 参加バリデーション (R-03,04,09)
+```
+
+| ファイル | カバー範囲 |
+|---------|-----------|
+| `test/adapter.test.js` | S-01 set→get / S-02 浅いマージ・多パス / S-03 null削除 / S-04 subscribe / S-05 子0件votes / S-06 serverTimestamp / S-07 round非配列化 / transaction |
+| `test/game.test.js` | V-03 全員投票→遷移 / V-04 タイムアウト補完 / V-05 単独最多 / V-06 タイ / V-07 全員1票=加点なし / V-08 冪等性 / 切断者除外 / R-03,R-04,R-09 |
+
+### 手動テスト
+
+S-08（onDisconnect）、W-*（Wikipedia）、I-*（結合）は実ブラウザ/ネットワーク依存のため手動で実施。
+`window.BB`（`DB` / `Wiki` / `UI` / `Session` / `host` / `helpers`）をコンソールから操作して確認できます。
 
 ## 既知の制約
 

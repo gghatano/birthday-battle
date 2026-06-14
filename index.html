@@ -1372,8 +1372,17 @@ function boot() {
 }
 boot();
 
-// デバッグ用にグローバル公開 (手動テスト S-01〜08 等)
-window.BB = { DB, Wiki, UI, Session, BACKEND };
+// デバッグ用・テスト用にグローバル公開 (手動テスト S-01〜08 / 自動テスト §11 等)
+window.BB = {
+  DB, Wiki, UI, Session, BACKEND,
+  // 純粋ヘルパー / ホスト権威ロジック (test/game.test.js から検証)
+  helpers: { connectedPlayers, allPlayers, roundKey, isHost, me, genRoomCode },
+  host: {
+    maybeTally, maybeAdvanceFromCharacterSelect, checkStalePlayers,
+    migrateHost, hostSetTheme, hostNextRound, hostPlayAgain
+  },
+  rooms: { createRoom, joinRoom }
+};
 </script>
 </body>
 </html>
