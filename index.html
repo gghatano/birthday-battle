@@ -674,12 +674,46 @@ async function migrateHost(code, room, leavingHostID) {
 function startHostLoop() {
   stopTimer('hostTimer');
   UI.hostTimer = setInterval(() => {
-    if (isHost() && UI.room) hostReconcile(UI.room);
+    if (!UI.room) return;
+    electHostIfNeeded(UI.room);            // 全クライアントが実行 (ホスト不在の検知/移譲)
+    if (isHost()) hostReconcile(UI.room);  // 集計等はホストのみ
   }, HOST_TICK_MS);
 }
 
 function onRoomUpdate(room) {
+  electHostIfNeeded(room);
   if (isHost()) hostReconcile(room);
+}
+
+// ホスト不在を全クライアントが検知し、後継 (健在かつ joinedAt 最先頭) が自己昇格する。
+// ホストのタブが「退出ボタン以外」で閉じた/クラッシュした場合の停止を防ぐ。
+// hostReconcile はホストのみ実行のため、これは非ホスト側にも必要 (review M2 対応)。
+let _electing = false;
+async function electHostIfNeeded(room) {
+  if (_electing || !room) return;
+  const now = Date.now();
+  // 健在 = 明示切断でなく、かつ lastSeen が新しい (クラッシュ=pagehide無し にも対応)
+  const fresh = (p) => p && p.connected !== false && p.lastSeen && (now - p.lastSeen) <= STALE_MS;
+  const hostP = room.players && room.players[room.host];
+  if (fresh(hostP)) return;  // ホスト健在なら何もしない
+
+  const candidates = Object.entries(room.players || {})
+    .filter(([id, p]) => id !== room.host && fresh(p))
+    .sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0));
+  if (!candidates.length) return;
+  if (candidates[0][0] !== Session.playerID) return;  // 自分が最先頭でなければ昇格しない
+
+  _electing = true;
+  try {
+    // transaction で二重昇格を防止: まだ旧ホストのままなら自分へ、交代済みなら中断
+    await DB.transaction('rooms/' + UI.roomCode + '/host', (curHost) =>
+      curHost === room.host ? Session.playerID : undefined
+    );
+  } catch (e) {
+    console.error('electHost error', e);
+  } finally {
+    _electing = false;
+  }
 }
 
 let _reconciling = false;
@@ -765,25 +799,22 @@ async function maybeTally(room) {
   let max = 0;
   for (const c of Object.values(counts)) max = Math.max(max, c);
 
-  const results = {};
-  const scoreUpdates = {};
+  // votes 補完・results・score・status を「単一の」多パス update で原子的に書込む。
+  // results と score を別 write に分けると、片方失敗時に results 済み=スキップ判定で
+  // 加点が永久に欠落しうる (review H1)。1回の write で冪等性と原子性を両立する。
+  // 注意: Firebase の多パス update は祖先と子孫パスの混在を禁止するため
+  // 'results' 自体は書かず 'results/{id}' のみを書く (子の生成で results ノードは存在する)。
+  const updates = {};
+  updates['rounds/' + rk + '/votes'] = voteMap;
+  updates['status'] = 'round_result';
   for (const [id, p] of allPlayers(room)) {
     const vc = counts[id] || 0;
     // 最多=2票以上の場合のみ加点 (§8)
     const awarded = (max >= 2 && vc === max);
-    results[id] = { voteCount: vc, pointAwarded: awarded };
-    if (awarded) scoreUpdates[id + '/score'] = (p.score || 0) + 1;
+    updates['rounds/' + rk + '/results/' + id] = { voteCount: vc, pointAwarded: awarded };
+    if (awarded) updates['players/' + id + '/score'] = (p.score || 0) + 1;
   }
-
-  // 原子的に書込: votes 補完 → results → score → status
-  const updates = {};
-  updates['rounds/' + rk + '/votes'] = voteMap;
-  updates['rounds/' + rk + '/results'] = results;
-  updates['status'] = 'round_result';
   await DB.update('rooms/' + UI.roomCode, updates);
-  if (Object.keys(scoreUpdates).length) {
-    await DB.update('rooms/' + UI.roomCode + '/players', scoreUpdates);
-  }
 }
 
 /* ホスト操作 (ボタン起点) ------------------------------------------------ */
@@ -1379,7 +1410,7 @@ window.BB = {
   helpers: { connectedPlayers, allPlayers, roundKey, isHost, me, genRoomCode },
   host: {
     maybeTally, maybeAdvanceFromCharacterSelect, checkStalePlayers,
-    migrateHost, hostSetTheme, hostNextRound, hostPlayAgain
+    migrateHost, electHostIfNeeded, hostSetTheme, hostNextRound, hostPlayAgain
   },
   rooms: { createRoom, joinRoom }
 };

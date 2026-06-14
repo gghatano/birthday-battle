@@ -173,6 +173,48 @@ function resultOf(room, id) { return (room.rounds.r1.results || {})[id] || { vot
     check('DISC', '切断者を除いて全員投票完了判定', r.status === 'round_result');
   }
 
+  // ---- ホスト移譲 (review M2: ホスト不在を全クライアントが検知し自己昇格) ----
+  // 旧ホストが stale。健在で joinedAt 最先頭のプレイヤーが自己昇格する。
+  {
+    const now = Date.now();
+    DB.set('rooms/ELECT', {
+      host: 'H', status: 'voting', currentRound: 1, totalRounds: 5,
+      players: {
+        H: { name: 'H', joinedAt: 1, connected: true, lastSeen: now - 999999, score: 0 }, // stale
+        B: { name: 'B', joinedAt: 2, connected: true, lastSeen: now, score: 0 },           // 最先頭健在
+        C: { name: 'C', joinedAt: 3, connected: true, lastSeen: now, score: 0 }
+      }
+    });
+    UI.roomCode = 'ELECT';
+    // B 視点: 自分が最先頭健在 → 昇格する
+    Session.playerID = 'B';
+    await host.electHostIfNeeded(DB.get('rooms/ELECT'));
+    const afterB = DB.get('rooms/ELECT');
+    check('ELECT-1', '健在最先頭(B)が旧ホスト不在を検知し昇格', afterB.host === 'B');
+
+    // C 視点 (B 昇格前を想定し host を H に戻す): 自分は最先頭でない → 昇格しない
+    DB.set('rooms/ELECT/host', 'H');
+    Session.playerID = 'C';
+    await host.electHostIfNeeded(DB.get('rooms/ELECT'));
+    check('ELECT-2', '非最先頭(C)は昇格しない', DB.get('rooms/ELECT').host === 'H');
+  }
+
+  // ホスト健在なら昇格は起きない
+  {
+    const now = Date.now();
+    DB.set('rooms/ELECT2', {
+      host: 'H', status: 'voting', currentRound: 1, totalRounds: 5,
+      players: {
+        H: { name: 'H', joinedAt: 1, connected: true, lastSeen: now, score: 0 }, // 健在
+        B: { name: 'B', joinedAt: 2, connected: true, lastSeen: now, score: 0 }
+      }
+    });
+    UI.roomCode = 'ELECT2';
+    Session.playerID = 'B';
+    await host.electHostIfNeeded(DB.get('rooms/ELECT2'));
+    check('ELECT-3', 'ホスト健在時は移譲しない', DB.get('rooms/ELECT2').host === 'H');
+  }
+
   // ---- ルーム管理バリデーション ----
   // R-03 存在しないコード
   {
