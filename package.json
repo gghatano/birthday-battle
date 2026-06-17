@@ -1,0 +1,9 @@
+{
+  "name": "birthday-battle",
+  "version": "1.2.0",
+  "description": "誕生日キャラ対決ゲーム — 単一HTML / Sync Adapter + Wikipedia API",
+  "private": true,
+  "scripts": {
+    "test": "node test/adapter.test.js && node test/game.test.js"
+  }
+}

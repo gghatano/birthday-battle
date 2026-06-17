@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>誕生日キャラ対決ゲーム</title>
+<style>
+  :root {
+    --bg: #11131a;
+    --panel: #1b1f2b;
+    --panel-2: #232838;
+    --accent: #ff5d73;
+    --accent-2: #5d8bff;
+    --gold: #ffd24a;
+    --text: #eef1f7;
+    --muted: #9aa3b8;
+    --ok: #3ddc84;
+    --danger: #ff6b6b;
+    --radius: 14px;
+    --shadow: 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN",
+                 "Noto Sans JP", Meiryo, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1d2334 0%, var(--bg) 60%);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+  #app { max-width: 760px; margin: 0 auto; padding: 16px; }
+  h1, h2, h3 { margin: 0 0 12px; font-weight: 800; letter-spacing: .02em; }
+  h1 { font-size: 1.6rem; }
+  p { margin: 0 0 10px; }
+  .muted { color: var(--muted); }
+  .center { text-align: center; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+  }
+  label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 6px; }
+  input[type="text"], select {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 1rem;
+    outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent-2); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 0; }
+  button {
+    border: none;
+    border-radius: 10px;
+    padding: 13px 16px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform .05s ease, filter .15s ease, opacity .15s ease;
+    color: #fff;
+    background: var(--panel-2);
+  }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), #ff7a5d); }
+  .btn-secondary { background: var(--accent-2); }
+  .btn-ghost { background: transparent; border: 1px solid rgba(255,255,255,.18); }
+  .btn-gold { background: linear-gradient(135deg, var(--gold), #ffb347); color: #2a2200; }
+  .full { width: 100%; }
+  .mt { margin-top: 12px; }
+  .mb { margin-bottom: 12px; }
+  .stack > * + * { margin-top: 12px; }
+  .pill {
+    display: inline-block; padding: 4px 10px; border-radius: 999px;
+    background: var(--panel-2); font-size: .8rem; color: var(--muted);
+  }
+  .roomcode {
+    font-size: 2rem; font-weight: 900; letter-spacing: .35em;
+    text-align: center; cursor: pointer; user-select: all;
+    padding: 14px; border-radius: 12px; background: var(--panel-2);
+  }
+  .roomcode:active { filter: brightness(1.2); }
+  .players { list-style: none; padding: 0; margin: 0; }
+  .players li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 10px; background: var(--panel-2);
+    margin-bottom: 8px;
+  }
+  .players li.disconnected { opacity: .4; }
+  .players .name { font-weight: 700; flex: 1; }
+  .crown { font-size: 1.1rem; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .card {
+    background: var(--panel-2); border-radius: 12px; overflow: hidden;
+    border: 2px solid transparent; cursor: pointer; text-align: left;
+    padding: 0; display: flex; flex-direction: column;
+  }
+  .card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(255,93,115,.3); }
+  .card .thumb {
+    width: 100%; aspect-ratio: 1/1; object-fit: cover; background: #2c3144;
+    display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 2.4rem;
+  }
+  .card .body { padding: 10px 12px; }
+  .card .title { font-weight: 800; font-size: .98rem; margin-bottom: 4px; }
+  .card .desc { font-size: .78rem; color: var(--muted);
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .owner { font-size: .75rem; color: var(--accent-2); margin-top: 6px; font-weight: 700; }
+  .theme-banner {
+    text-align: center; font-size: 1.5rem; font-weight: 900;
+    padding: 16px; border-radius: 12px;
+    background: linear-gradient(135deg, rgba(93,139,255,.25), rgba(255,93,115,.25));
+    margin-bottom: 16px;
+  }
+  .timer { font-size: 1.1rem; font-weight: 800; }
+  .timer.warn { color: var(--danger); }
+  .progress { font-size: .9rem; color: var(--muted); }
+  .preset-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .preset-grid button { flex: 0 0 auto; background: var(--panel-2); font-weight: 600; font-size: .9rem; }
+  .preset-grid button.selected { background: var(--accent-2); }
+  .rank { list-style: none; padding: 0; margin: 0; }
+  .rank li {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px; border-radius: 12px; background: var(--panel-2); margin-bottom: 10px;
+  }
+  .rank li.winner { border: 2px solid var(--gold); background: linear-gradient(135deg, rgba(255,210,74,.18), var(--panel-2)); }
+  .rank .thumb { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: #2c3144; flex: 0 0 auto;
+    display:flex; align-items:center; justify-content:center; font-size:1.6rem; color:var(--muted); }
+  .rank .meta { flex: 1; min-width: 0; }
+  .rank .votes { font-weight: 900; font-size: 1.2rem; }
+  .scoreboard { display: flex; flex-direction: column; gap: 6px; }
+  .scoreboard .srow { display: flex; justify-content: space-between; padding: 8px 12px; background: var(--panel-2); border-radius: 8px; }
+  .winner-hero { text-align: center; padding: 24px 0; }
+  .winner-hero img, .winner-hero .ph {
+    width: 160px; height: 160px; border-radius: 20px; object-fit: cover; margin: 0 auto 14px;
+    box-shadow: 0 0 0 4px var(--gold), var(--shadow); display: block; animation: pop .6s ease;
+    background:#2c3144;
+  }
+  @keyframes pop { 0% { transform: scale(.3); opacity: 0; } 70% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: #000c; color: #fff; padding: 12px 18px; border-radius: 999px;
+    font-size: .9rem; z-index: 50; box-shadow: var(--shadow); max-width: 90%;
+  }
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex;
+    align-items: center; justify-content: center; padding: 20px; z-index: 40;
+  }
+  .modal { background: var(--panel); border-radius: var(--radius); padding: 20px; width: 100%; max-width: 380px; }
+  .spinner {
+    width: 28px; height: 28px; border: 3px solid rgba(255,255,255,.2);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 16px auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-box { color: var(--danger); font-size: .9rem; }
+  .badge-self { font-size: .7rem; background: var(--accent); padding: 2px 8px; border-radius: 999px; color:#fff; }
+  .hr { height: 1px; background: rgba(255,255,255,.08); margin: 16px 0; }
+  .vote-count { font-size: .75rem; color: var(--ok); font-weight: 700; margin-top: 4px; }
+</style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="overlay"></div>
+
+<script>
+/* =========================================================================
+ * 誕生日キャラ対決ゲーム — 単一HTML実装
+ * 仕様書 v1.2 準拠
+ *
+ * 構成:
+ *   1. Sync Adapter (バックエンド抽象)  — LocalAdapter / FirebaseAdapter
+ *   2. Wikipedia モジュール            — 単一リクエスト取得
+ *   3. ゲーム状態 / ルーム操作          — Adapter API のみ使用
+ *   4. ホスト権威ロジック (集計/遷移)
+ *   5. UI レンダリング
+ *
+ * 重要: ゲームロジックは Adapter API のみを呼ぶ。firebase を直接触らない。
+ * ========================================================================= */
+
+/* -------------------------------------------------------------------------
+ * 0. 設定
+ * ----------------------------------------------------------------------- */
+const QS = new URLSearchParams(location.search);
+const BACKEND = QS.get('backend') === 'firebase' ? 'firebase' : 'local'; // 切替フラグ
+const ROUND_SECONDS = 60;
+const MAX_PLAYERS = 10;
+const HEARTBEAT_MS = 4000;       // 自タブの lastSeen 更新間隔
+const STALE_MS = 12000;          // この時間 lastSeen が古ければ stale 判定
+const HOST_TICK_MS = 1000;       // ホストの監視ループ間隔
+
+// Firebase 用設定 (移行時に投入。§2.5)
+const firebaseConfig = {
+  // apiKey: "...", authDomain: "...", databaseURL: "...", projectId: "..."
+};
+
+const PRESET_THEMES = [
+  "一番強そう", "一番頭が良さそう", "一番お金持ちそう", "一番モテそう",
+  "一番長生きしそう", "一番怖そう", "一番優しそう", "一番足が速そう",
+  "一番料理が上手そう", "一番リーダーに向いてそう", "一番友達が多そう",
+  "一番秘密を守れそう", "一番嘘が上手そう", "一番歌が上手そう"
+];
+
+/* -------------------------------------------------------------------------
+ * 1. Sync Adapter — 共通ユーティリティ
+ *
+ * パスは "rooms/ABC123/players/xyz/score" 形式のスラッシュ区切り。
+ * すべての実装は同一の振る舞いを保証する (S-01〜08)。
+ * ----------------------------------------------------------------------- */
+
+// パス文字列 → セグメント配列 (空セグメント除去)
+function segs(path) {
+  return String(path).split('/').filter(Boolean);
+}
+
+// ツリーから path の値を取得 (無ければ null)
+function getIn(tree, path) {
+  let node = tree;
+  for (const s of segs(path)) {
+    if (node == null || typeof node !== 'object') return null;
+    node = node[s];
+  }
+  return node === undefined ? null : node;
+}
+
+// ツリーの path に value を設定 (null は削除)。変更があれば true。
+function setIn(tree, path, value) {
+  const parts = segs(path);
+  if (parts.length === 0) return false;
+  let node = tree;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const k = parts[i];
+    if (node[k] == null || typeof node[k] !== 'object') node[k] = {};
+    node = node[k];
+  }
+  const last = parts[parts.length - 1];
+  if (value === null || value === undefined) {
+    if (!(last in node)) return false;
+    delete node[last];
+  } else {
+    node[last] = value;
+  }
+  return true;
+}
+
+/* -------------------------------------------------------------------------
+ * 1a. LocalAdapter
+ *   - 真実の源: localStorage 単一キー (DB全体のJSON)
+ *   - タブ間リアルタイム: BroadcastChannel で変更パスを通知
+ *   - subscribe: path→callbacks レジストリ、変更パスの前方一致で発火
+ *   - onDisconnect: pagehide + ハートビート (lastSeen)
+ * ----------------------------------------------------------------------- */
+function createLocalAdapter() {
+  const STORAGE_KEY = 'birthday-battle-db';
+  const CHANNEL = 'birthday-battle-sync';
+  const bc = ('BroadcastChannel' in self) ? new BroadcastChannel(CHANNEL) : null;
+  const subs = [];                 // { path, cb }
+  const disconnectActions = [];    // { type:'set'|'remove', path, value }
+  let tree = load();
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function persist() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tree));
+  }
+  // 他タブ / 自タブのストレージ更新を取り込み、購読を発火
+  function reload(changedPath) {
+    tree = load();
+    fire(changedPath);
+  }
+  function fire(changedPath) {
+    const cp = changedPath || '';
+    for (const sub of subs) {
+      // 前方一致: 変更パスが購読パスの祖先 or 子孫なら発火
+      if (cp === '' || cp.startsWith(sub.path) || sub.path.startsWith(cp)) {
+        try { sub.cb(getIn(tree, sub.path)); } catch (e) { console.error(e); }
+      }
+    }
+  }
+  function broadcast(changedPath) {
+    if (bc) bc.postMessage({ path: changedPath, from: TAB_ID });
+  }
+  function commit(changedPath) {
+    persist();
+    fire(changedPath);       // 自タブを即発火
+    broadcast(changedPath);  // 他タブへ通知
+  }
+
+  if (bc) {
+    bc.onmessage = (ev) => {
+      if (!ev.data || ev.data.from === TAB_ID) return;
+      reload(ev.data.path);  // 他タブの書込を取り込んで発火
+    };
+  }
+  // storage イベント (BroadcastChannel 非対応時のフォールバック)
+  addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY) reload('');
+  });
+
+  // 切断時アクションの実行 (タブ閉じ)
+  function flushDisconnect() {
+    tree = load();
+    let changed = false;
+    for (const a of disconnectActions) {
+      if (a.type === 'remove') changed = setIn(tree, a.path, null) || changed;
+      else changed = setIn(tree, a.path, a.value) || changed;
+    }
+    if (changed) { persist(); broadcast(''); }
+  }
+  addEventListener('pagehide', flushDisconnect);
+  addEventListener('beforeunload', flushDisconnect);
+
+  return {
+    name: 'local',
+    get(path) { tree = load(); return getIn(tree, path); },
+    set(path, value) { tree = load(); if (setIn(tree, path, value)) commit(path); },
+    update(path, partial) {
+      tree = load();
+      let changed = false;
+      // 多パス対応: キー自身がサブパス (スラッシュ可)。null は削除。
+      for (const key of Object.keys(partial)) {
+        const full = path ? path + '/' + key : key;
+        const v = partial[key];
+        changed = setIn(tree, full, v === undefined ? null : v) || changed;
+      }
+      if (changed) commit(path);
+    },
+    remove(path) { tree = load(); if (setIn(tree, path, null)) commit(path); },
+    subscribe(path, cb) {
+      const sub = { path, cb };
+      subs.push(sub);
+      // 初回は現在値を発火 (Firebase の value イベント挙動に合わせる)
+      tree = load();
+      try { cb(getIn(tree, path)); } catch (e) { console.error(e); }
+      return () => { const i = subs.indexOf(sub); if (i >= 0) subs.splice(i, 1); };
+    },
+    transaction(path, fn) {
+      tree = load();
+      const current = getIn(tree, path);
+      const next = fn(current);
+      if (next === undefined) return { committed: false, value: current };
+      setIn(tree, path, next === null ? null : next);
+      commit(path);
+      return { committed: true, value: next };
+    },
+    onDisconnect(path) {
+      return {
+        set(value) { disconnectActions.push({ type: 'set', path, value }); },
+        remove() { disconnectActions.push({ type: 'remove', path }); },
+        cancel() {
+          for (let i = disconnectActions.length - 1; i >= 0; i--) {
+            if (disconnectActions[i].path === path) disconnectActions.splice(i, 1);
+          }
+        }
+      };
+    },
+    serverTimestamp() { return Date.now(); },  // 同一マシン=時刻ズレなし
+    now() { return Date.now(); }               // 比較用の現在時刻 (server同期)
+  };
+}
+
+/* -------------------------------------------------------------------------
+ * 1b. FirebaseAdapter (移行用・薄いマッピング)
+ *   §2.5 に従い BACKEND=firebase かつ SDK 読込時のみ有効。
+ *   API 形状は LocalAdapter と同一。
+ * ----------------------------------------------------------------------- */
+function createFirebaseAdapter() {
+  if (typeof firebase === 'undefined') {
+    throw new Error('Firebase SDK が読み込まれていません (§2.5 を参照)');
+  }
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  const ref = (path) => db.ref(path);
+  // サーバ時刻オフセットを購読し、now() を server 同期にする (review C3)。
+  // これにより endsAt / lastSeen 比較が端末のローカル時計ズレに影響されない。
+  let _serverOffset = 0;
+  db.ref('.info/serverTimeOffset').on('value', (s) => { _serverOffset = s.val() || 0; });
+  return {
+    name: 'firebase',
+    async get(path) { const snap = await ref(path).once('value'); return snap.val(); },
+    set(path, value) { return ref(path).set(value); },
+    update(path, partial) { return ref(path).update(partial); }, // 多パス: キーに / を含めて深い更新
+    remove(path) { return ref(path).remove(); },
+    subscribe(path, cb) {
+      const handler = ref(path).on('value', (snap) => cb(snap.val()));
+      return () => ref(path).off('value', handler);
+    },
+    transaction(path, fn) {
+      return ref(path).transaction((current) => fn(current))
+        .then((res) => ({ committed: res.committed, value: res.snapshot.val() }));
+    },
+    onDisconnect(path) {
+      const od = ref(path).onDisconnect();
+      return {
+        set: (value) => od.set(value),
+        remove: () => od.remove(),
+        cancel: () => od.cancel()
+      };
+    },
+    serverTimestamp() { return firebase.database.ServerValue.TIMESTAMP; },
+    now() { return Date.now() + _serverOffset; }  // server 同期した現在時刻
+  };
+}
+
+const TAB_ID = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
+const DB = BACKEND === 'firebase' ? createFirebaseAdapter() : createLocalAdapter();
+
+/* -------------------------------------------------------------------------
+ * 2. Wikipedia モジュール — 単一リクエスト (N+1 回避, §4.3)
+ * ----------------------------------------------------------------------- */
+const Wiki = {
+  async fetchBirthdayPeople(month, day) {
+    const category = `Category:${month}月${day}日生`;
+    const url = 'https://ja.wikipedia.org/w/api.php?' + new URLSearchParams({
+      action: 'query',
+      generator: 'categorymembers',
+      gcmtitle: category,
+      gcmlimit: '50',
+      gcmtype: 'page',
+      prop: 'extracts|pageimages',
+      exintro: '1',
+      explaintext: '1',
+      exsentences: '2',
+      piprop: 'thumbnail',
+      pithumbsize: '200',
+      format: 'json',
+      origin: '*'   // CORS 回避に必須。絶対に消さない
+    });
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Wikipedia API エラー: ' + res.status);
+    const data = await res.json();
+    const pages = (data.query && data.query.pages) ? Object.values(data.query.pages) : [];
+
+    // 人物以外 (記念日ページ等) を軽くフィルタ: extract が空 / 名前空間ページを除外
+    const people = pages.filter(p =>
+      p.extract && p.extract.trim().length > 0 &&
+      !/^(Category|Wikipedia|Template|Help|Portal):/.test(p.title)
+    ).map(p => ({
+      title: p.title,
+      description: p.extract.trim(),
+      thumbnail: p.thumbnail ? p.thumbnail.source : null
+    }));
+
+    // 50件超はシャッフルして30件に絞る
+    shuffle(people);
+    return people.slice(0, 30);
+  }
+};
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/* -------------------------------------------------------------------------
+ * 3. ローカル永続セッション (§5.2) + アプリ状態
+ * ----------------------------------------------------------------------- */
+const Session = {
+  get playerID() { return localStorage.getItem('bb_playerID'); },
+  set playerID(v) { localStorage.setItem('bb_playerID', v); },
+  get roomCode() { return localStorage.getItem('bb_roomCode'); },
+  set roomCode(v) { v ? localStorage.setItem('bb_roomCode', v) : localStorage.removeItem('bb_roomCode'); },
+  get name() { return localStorage.getItem('bb_name') || ''; },
+  set name(v) { localStorage.setItem('bb_name', v); },
+  ensurePlayerID() {
+    if (!this.playerID) this.playerID = (crypto.randomUUID ? crypto.randomUUID() : 'p_' + Date.now() + Math.random());
+    return this.playerID;
+  }
+};
+
+// 揮発的なローカルUI状態 (DBに入れない)
+const UI = {
+  screen: 'top',        // 'top' | 'joining' | 'loading'
+  room: null,           // 現在購読中のルームスナップショット
+  roomCode: null,
+  unsub: null,          // ルーム購読解除
+  hostTimer: null,      // ホスト監視ループ
+  heartbeatTimer: null, // ハートビート
+  tickTimer: null,      // タイマー再描画
+  // キャラ選択
+  searchResults: null,
+  searchLoading: false,
+  searchError: null,
+  selectedCharacter: null,
+  bdMonth: 1, bdDay: 1,
+  // テーマ
+  themeInput: '',
+  selectedPreset: null,
+  // 投票
+  selectedVote: null,
+};
+
+function roomPath(sub) {
+  const base = 'rooms/' + UI.roomCode;
+  return sub ? base + '/' + sub : base;
+}
+function me() {
+  return UI.room && UI.room.players ? UI.room.players[Session.playerID] : null;
+}
+function isHost() {
+  return UI.room && UI.room.host === Session.playerID;
+}
+// connected なプレイヤー一覧 (joinedAt 昇順)
+function connectedPlayers(room) {
+  const players = (room && room.players) ? room.players : {};
+  return Object.entries(players)
+    .filter(([, p]) => p && p.connected)
+    .sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0));
+}
+function allPlayers(room) {
+  const players = (room && room.players) ? room.players : {};
+  return Object.entries(players).sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0));
+}
+function roundKey(n) { return 'r' + n; }  // 配列化回避 (§2.4-1)
+
+/* -------------------------------------------------------------------------
+ * 4. ルーム操作
+ * ----------------------------------------------------------------------- */
+function genRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 紛らわしい文字除外
+  let c = '';
+  for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)];
+  return c;
+}
+
+async function createRoom(name) {
+  const playerID = Session.ensurePlayerID();
+  Session.name = name;
+  let code = genRoomCode();
+  // 衝突回避 (まれ)
+  for (let i = 0; i < 5; i++) {
+    const existing = await DB.get('rooms/' + code);
+    if (!existing) break;
+    code = genRoomCode();
+  }
+  const now = DB.serverTimestamp();
+  const room = {
+    host: playerID,
+    status: 'waiting',
+    totalRounds: 5,
+    currentRound: 1,
+    currentTheme: '',
+    createdAt: now,
+    players: {
+      [playerID]: {
+        name, joinedAt: now, connected: true, lastSeen: now,
+        score: 0, characterReady: false
+      }
+    }
+  };
+  await DB.set('rooms/' + code, room);
+  Session.roomCode = code;
+  enterRoom(code);
+}
+
+async function joinRoom(name, code) {
+  code = (code || '').toUpperCase().trim();
+  const playerID = Session.ensurePlayerID();
+  Session.name = name;
+  const now = DB.serverTimestamp();
+
+  // 参加判定と追加を「単一の transaction」で原子的に行う (review M3)。
+  // 事前 read→write の TOCTOU で 11 人目が滑り込むのを防ぐ。
+  // 満員判定は connected な人数で行い、切断者の残留で不必要に弾かない。
+  let failReason = null;
+  const res = await DB.transaction('rooms/' + code, (room) => {
+    failReason = null;
+    if (!room) { failReason = 'ルームが見つかりませんでした'; return undefined; }
+    const existing = room.players && room.players[playerID];
+    if (room.status !== 'waiting' && !existing) {
+      failReason = 'このルームは既にゲーム中です'; return undefined;
+    }
+    const players = room.players || {};
+    const connectedCount = Object.values(players).filter(p => p && p.connected).length;
+    if (!existing && connectedCount >= MAX_PLAYERS) {
+      failReason = 'ルームが満員です（最大' + MAX_PLAYERS + '人）'; return undefined;
+    }
+    players[playerID] = {
+      name, connected: true, lastSeen: now,
+      joinedAt: existing ? existing.joinedAt : now,
+      score: existing ? (existing.score || 0) : 0,
+      characterReady: existing ? !!existing.characterReady : false,
+      character: existing ? (existing.character || null) : null
+    };
+    room.players = players;
+    return room;
+  });
+
+  if (!res.committed) return { error: failReason || '参加できませんでした' };
+  Session.roomCode = code;
+  enterRoom(code);
+  return { ok: true };
+}
+
+function enterRoom(code) {
+  UI.roomCode = code;
+  UI.screen = 'inroom';
+  // 切断登録 (§5.4): 即削除でなく connected=false
+  const od = DB.onDisconnect('rooms/' + code + '/players/' + Session.playerID + '/connected');
+  od.set(false);
+  // 購読
+  if (UI.unsub) UI.unsub();
+  UI.unsub = DB.subscribe('rooms/' + code, (room) => {
+    if (!room) {
+      // ルーム消滅
+      leaveRoomLocal();
+      toast('ルームが終了しました');
+      render();
+      return;
+    }
+    UI.room = room;
+    onRoomUpdate(room);
+    render();
+  });
+  startHeartbeat();
+  startHostLoop();
+  startTicker();
+}
+
+function startHeartbeat() {
+  stopTimer('heartbeatTimer');
+  const beat = () => {
+    if (!UI.roomCode) return;
+    DB.update('rooms/' + UI.roomCode + '/players/' + Session.playerID, {
+      lastSeen: DB.serverTimestamp(), connected: true
+    });
+  };
+  beat();
+  UI.heartbeatTimer = setInterval(beat, HEARTBEAT_MS);
+}
+
+function startTicker() {
+  stopTimer('tickTimer');
+  // 投票中のタイマー表示更新のため1秒ごとに再描画
+  UI.tickTimer = setInterval(() => {
+    if (UI.room && UI.room.status === 'voting') render();
+  }, 1000);
+}
+
+function stopTimer(key) {
+  if (UI[key]) { clearInterval(UI[key]); UI[key] = null; }
+}
+
+async function leaveRoom() {
+  const code = UI.roomCode;
+  const pid = Session.playerID;
+  if (code) {
+    const room = await DB.get('rooms/' + code);
+    if (room && room.host === pid) {
+      await migrateHost(code, room, pid);
+    }
+    await DB.remove('rooms/' + code + '/players/' + pid);
+    // 誰もいなくなったらルーム削除
+    const after = await DB.get('rooms/' + code + '/players');
+    if (!after || Object.keys(after).length === 0) {
+      await DB.remove('rooms/' + code);
+    }
+  }
+  leaveRoomLocal();
+  render();
+}
+
+function leaveRoomLocal() {
+  if (UI.unsub) { UI.unsub(); UI.unsub = null; }
+  stopTimer('hostTimer'); stopTimer('heartbeatTimer'); stopTimer('tickTimer');
+  UI.room = null; UI.roomCode = null;
+  UI.screen = 'top';
+  UI.searchResults = null; UI.selectedCharacter = null; UI.selectedVote = null;
+  UI.selectedPreset = null; UI.themeInput = '';
+  Session.roomCode = null;
+}
+
+// ホスト移譲 (§5.4): 接続中先頭 (自分以外) へ
+async function migrateHost(code, room, leavingHostID) {
+  const candidates = connectedPlayers(room).filter(([id]) => id !== leavingHostID);
+  if (candidates.length > 0) {
+    await DB.update('rooms/' + code, { host: candidates[0][0] });
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * 5. ホスト権威ロジック (§5.1) — ホストのみ実行
+ *   ルーム更新と定期ループから駆動する。
+ * ----------------------------------------------------------------------- */
+function startHostLoop() {
+  stopTimer('hostTimer');
+  UI.hostTimer = setInterval(() => {
+    if (!UI.room) return;
+    electHostIfNeeded(UI.room);            // 全クライアントが実行 (ホスト不在の検知/移譲)
+    if (isHost()) hostReconcile(UI.room);  // 集計等はホストのみ
+  }, HOST_TICK_MS);
+}
+
+function onRoomUpdate(room) {
+  electHostIfNeeded(room);
+  if (isHost()) hostReconcile(room);
+}
+
+// ホスト不在を全クライアントが検知し、後継 (健在かつ joinedAt 最先頭) が自己昇格する。
+// ホストのタブが「退出ボタン以外」で閉じた/クラッシュした場合の停止を防ぐ。
+// hostReconcile はホストのみ実行のため、これは非ホスト側にも必要 (review M2 対応)。
+let _electing = false;
+async function electHostIfNeeded(room) {
+  if (_electing || !room) return;
+  const now = DB.now();
+  // 健在 = 明示切断でなく、かつ lastSeen が新しい (クラッシュ=pagehide無し にも対応)
+  const fresh = (p) => p && p.connected !== false && p.lastSeen && (now - p.lastSeen) <= STALE_MS;
+  const hostP = room.players && room.players[room.host];
+  if (fresh(hostP)) return;  // ホスト健在なら何もしない
+
+  const candidates = Object.entries(room.players || {})
+    .filter(([id, p]) => id !== room.host && fresh(p))
+    .sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0));
+  if (!candidates.length) return;
+  if (candidates[0][0] !== Session.playerID) return;  // 自分が最先頭でなければ昇格しない
+
+  _electing = true;
+  try {
+    // transaction で二重昇格を防止: まだ旧ホストのままなら自分へ、交代済みなら中断
+    await DB.transaction('rooms/' + UI.roomCode + '/host', (curHost) =>
+      curHost === room.host ? Session.playerID : undefined
+    );
+  } catch (e) {
+    console.error('electHost error', e);
+  } finally {
+    _electing = false;
+  }
+}
+
+let _reconciling = false;
+async function hostReconcile(room) {
+  if (_reconciling) return;
+  _reconciling = true;
+  try {
+    await checkStalePlayers(room);
+    await checkHostPresence(room);
+    if (room.status === 'character_select') await maybeAdvanceFromCharacterSelect(room);
+    if (room.status === 'voting') await maybeTally(room);
+  } catch (e) {
+    console.error('hostReconcile error', e);
+  } finally {
+    _reconciling = false;
+  }
+}
+
+// ハートビートが古いプレイヤーを connected=false に (§2.3, R-07)
+async function checkStalePlayers(room) {
+  const now = DB.now();
+  const updates = {};
+  for (const [id, p] of Object.entries(room.players || {})) {
+    if (p.connected && p.lastSeen && (now - p.lastSeen) > STALE_MS) {
+      updates[id + '/connected'] = false;
+    }
+  }
+  if (Object.keys(updates).length) {
+    await DB.update('rooms/' + UI.roomCode + '/players', updates);
+  }
+}
+
+// ホストが切断扱いなら移譲 (自分がまだホストだが connected=false の他ホスト...は無いが念のため)
+async function checkHostPresence(room) {
+  const hostP = room.players && room.players[room.host];
+  if (!hostP || !hostP.connected) {
+    await migrateHost(UI.roomCode, room, room.host);
+  }
+}
+
+// 全員キャラ確定 → theme_setting (§7)
+async function maybeAdvanceFromCharacterSelect(room) {
+  const conn = connectedPlayers(room);
+  if (conn.length < 2) return;
+  const allReady = conn.every(([, p]) => p.characterReady && p.character);
+  if (allReady) {
+    await DB.update('rooms/' + UI.roomCode, { status: 'theme_setting' });
+  }
+}
+
+// 投票締切判定 → 集計 (§5.1, §8)
+async function maybeTally(room) {
+  const rk = roundKey(room.currentRound);
+  const round = (room.rounds && room.rounds[rk]) ? room.rounds[rk] : {};
+  // 冪等: 既に集計済みならスキップ (§9 二重集計)
+  if (round.results) return;
+
+  const conn = connectedPlayers(room);
+  if (conn.length < 2) return;
+  const votes = round.votes || {};
+  const now = DB.now();
+  const timedOut = round.endsAt && now >= round.endsAt;
+  const allVoted = conn.every(([id]) => votes[id]);
+
+  if (!allVoted && !timedOut) return;
+
+  // タイムアウト時の未投票をランダム補完 (§9, V-04)
+  const voteMap = Object.assign({}, votes);
+  if (timedOut) {
+    for (const [id] of conn) {
+      if (!voteMap[id]) {
+        const targets = conn.filter(([tid]) => tid !== id);
+        if (targets.length) voteMap[id] = targets[Math.floor(Math.random() * targets.length)][0];
+      }
+    }
+  }
+
+  // 集計
+  const counts = {};
+  for (const [, target] of Object.entries(voteMap)) {
+    if (target) counts[target] = (counts[target] || 0) + 1;
+  }
+  let max = 0;
+  for (const c of Object.values(counts)) max = Math.max(max, c);
+
+  // votes 補完・results・score・status を「単一の」多パス update で原子的に書込む。
+  // results と score を別 write に分けると、片方失敗時に results 済み=スキップ判定で
+  // 加点が永久に欠落しうる (review H1)。1回の write で冪等性と原子性を両立する。
+  // 注意: Firebase の多パス update は祖先と子孫パスの混在を禁止するため
+  // 'results' 自体は書かず 'results/{id}' のみを書く (子の生成で results ノードは存在する)。
+  const updates = {};
+  updates['rounds/' + rk + '/votes'] = voteMap;
+  updates['status'] = 'round_result';
+  for (const [id, p] of allPlayers(room)) {
+    const vc = counts[id] || 0;
+    // 最多=2票以上の場合のみ加点 (§8)
+    const awarded = (max >= 2 && vc === max);
+    updates['rounds/' + rk + '/results/' + id] = { voteCount: vc, pointAwarded: awarded };
+    if (awarded) updates['players/' + id + '/score'] = (p.score || 0) + 1;
+  }
+  await DB.update('rooms/' + UI.roomCode, updates);
+}
+
+/* ホスト操作 (ボタン起点) ------------------------------------------------ */
+
+async function hostStartGame() {
+  if (!isHost()) return;
+  await DB.update('rooms/' + UI.roomCode, { status: 'character_select', currentRound: 1 });
+}
+
+async function hostSetTheme(theme) {
+  if (!isHost()) return;
+  const room = UI.room;
+  const rk = roundKey(room.currentRound);
+  // endsAt は server 同期した now() から数値で確定 (§2.4-3, §5.3 / review C2)。
+  // sentinel の算術を避け、全クライアントが DB.now() 基準で残秒を一致計算できる。
+  const endsAt = DB.now() + ROUND_SECONDS * 1000;
+  await DB.update('rooms/' + UI.roomCode, {
+    currentTheme: theme,
+    status: 'voting',
+    ['rounds/' + rk + '/theme']: theme,
+    ['rounds/' + rk + '/endsAt']: endsAt
+  });
+}
+
+async function hostNextRound() {
+  if (!isHost()) return;
+  const room = UI.room;
+  if (room.currentRound >= room.totalRounds) {
+    await DB.update('rooms/' + UI.roomCode, { status: 'finished' });
+  } else {
+    const next = room.currentRound + 1;
+    await DB.update('rooms/' + UI.roomCode, {
+      currentRound: next,
+      currentTheme: '',
+      status: 'theme_setting'
+    });
+  }
+}
+
+async function hostPlayAgain() {
+  if (!isHost()) return;
+  const room = UI.room;
+  const updates = { currentRound: 1, currentTheme: '', status: 'character_select', rounds: null };
+  await DB.update('rooms/' + UI.roomCode, updates);
+  // 各プレイヤーの score / characterReady / character リセット
+  const pUpdates = {};
+  for (const [id] of allPlayers(room)) {
+    pUpdates[id + '/score'] = 0;
+    pUpdates[id + '/characterReady'] = false;
+    pUpdates[id + '/character'] = null;
+  }
+  await DB.update('rooms/' + UI.roomCode + '/players', pUpdates);
+}
+
+async function hostSetRounds(n) {
+  if (!isHost()) return;
+  await DB.update('rooms/' + UI.roomCode, { totalRounds: n });
+}
+
+/* プレイヤー操作 --------------------------------------------------------- */
+
+async function confirmCharacter(character) {
+  await DB.update('rooms/' + UI.roomCode + '/players/' + Session.playerID, {
+    character, characterReady: true
+  });
+}
+
+async function castVote(targetID) {
+  const rk = roundKey(UI.room.currentRound);
+  await DB.set('rooms/' + UI.roomCode + '/rounds/' + rk + '/votes/' + Session.playerID, targetID);
+}
+
+/* -------------------------------------------------------------------------
+ * 6. UI レンダリング
+ * ----------------------------------------------------------------------- */
+const app = document.getElementById('app');
+const overlay = document.getElementById('overlay');
+
+function render() {
+  if (UI.screen === 'top') return renderTop();
+  if (!UI.room) return renderTop();
+  switch (UI.room.status) {
+    case 'waiting': return renderLobby();
+    case 'character_select': return renderCharacterSelect();
+    case 'theme_setting': return renderThemeSetting();
+    case 'voting': return renderVoting();
+    case 'round_result': return renderRoundResult();
+    case 'finished': return renderFinal();
+    default: return renderLobby();
+  }
+}
+
+function h(html) { return html; }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* --- TOP --- */
+function renderTop() {
+  const savedRoom = Session.roomCode;
+  const savedName = Session.name;
+  app.innerHTML = h(`
+    <div class="panel center">
+      <h1>🎂 誕生日キャラ対決</h1>
+      <p class="muted">誕生日から有名人を選んで、お題で対決！</p>
+    </div>
+    ${savedRoom ? `
+    <div class="panel">
+      <p class="muted">前回のルーム</p>
+      <button class="btn-secondary full" id="rejoin">ルーム ${esc(savedRoom)} に戻る</button>
+    </div>` : ''}
+    <div class="panel stack">
+      <div>
+        <label>プレイヤー名 (1〜12文字)</label>
+        <input type="text" id="name" maxlength="12" value="${esc(savedName)}" placeholder="なまえ" />
+        <div class="error-box" id="nameErr"></div>
+      </div>
+      <button class="btn-primary full" id="create">ルームを作成</button>
+      <button class="btn-ghost full" id="joinOpen">ルームに参加</button>
+    </div>
+    <p class="center muted" style="font-size:.75rem">backend: ${BACKEND}</p>
+  `);
+
+  const nameInput = document.getElementById('name');
+  const nameErr = document.getElementById('nameErr');
+  function validName() {
+    const v = nameInput.value.trim();
+    if (v.length < 1 || v.length > 12) { nameErr.textContent = '名前は1〜12文字で入力してください'; return null; }
+    nameErr.textContent = '';
+    return v;
+  }
+  if (savedRoom) {
+    document.getElementById('rejoin').onclick = async () => {
+      const v = savedName || nameInput.value.trim() || 'プレイヤー';
+      const r = await joinRoom(v, savedRoom);
+      if (r.error) { Session.roomCode = null; toast(r.error); render(); }
+    };
+  }
+  document.getElementById('create').onclick = async () => {
+    const v = validName(); if (!v) return;
+    UI.screen = 'loading'; render2Loading('ルームを作成中...');
+    await createRoom(v);
+  };
+  document.getElementById('joinOpen').onclick = () => {
+    const v = validName(); if (!v) return;
+    openJoinModal(v);
+  };
+}
+
+function render2Loading(msg) {
+  app.innerHTML = `<div class="panel center"><div class="spinner"></div><p class="muted">${esc(msg)}</p></div>`;
+}
+
+function openJoinModal(name) {
+  overlay.innerHTML = h(`
+    <div class="modal-backdrop">
+      <div class="modal stack">
+        <h3>ルームに参加</h3>
+        <input type="text" id="code" maxlength="6" placeholder="ルームコード (6桁)"
+               style="text-transform:uppercase; letter-spacing:.2em; text-align:center; font-size:1.2rem;" />
+        <div class="error-box" id="joinErr"></div>
+        <div class="row">
+          <button class="btn-ghost" id="cancelJoin">キャンセル</button>
+          <button class="btn-primary" id="doJoin">参加</button>
+        </div>
+      </div>
+    </div>`);
+  const codeInput = document.getElementById('code');
+  codeInput.focus();
+  document.getElementById('cancelJoin').onclick = () => overlay.innerHTML = '';
+  document.getElementById('doJoin').onclick = async () => {
+    const code = codeInput.value.trim().toUpperCase();
+    if (code.length !== 6) { document.getElementById('joinErr').textContent = '6桁のコードを入力してください'; return; }
+    document.getElementById('doJoin').disabled = true;
+    const r = await joinRoom(name, code);
+    if (r.error) {
+      document.getElementById('joinErr').textContent = r.error;
+      document.getElementById('doJoin').disabled = false;
+    } else {
+      overlay.innerHTML = '';
+    }
+  };
+}
+
+/* --- 待機室 (ロビー) --- */
+function renderLobby() {
+  const room = UI.room;
+  const host = isHost();
+  const conn = connectedPlayers(room);
+  const playerList = allPlayers(room).map(([id, p]) => `
+    <li class="${p.connected ? '' : 'disconnected'}">
+      <span class="name">${esc(p.name)} ${id === Session.playerID ? '<span class="badge-self">あなた</span>' : ''}</span>
+      ${id === room.host ? '<span class="crown">👑</span>' : ''}
+      ${p.connected ? '' : '<span class="pill">切断中</span>'}
+    </li>`).join('');
+
+  const roundOptions = [3, 5, 7, 10].map(n =>
+    `<button class="${room.totalRounds === n ? 'btn-secondary' : 'btn-ghost'}" data-rounds="${n}" ${host ? '' : 'disabled'}>${n}</button>`
+  ).join('');
+
+  app.innerHTML = h(`
+    <div class="panel center">
+      <p class="muted">ルームコード（タップでコピー）</p>
+      <div class="roomcode" id="roomcode">${esc(UI.roomCode)}</div>
+    </div>
+    <div class="panel">
+      <h3>参加者 (${conn.length}人接続中 / 最大${MAX_PLAYERS})</h3>
+      <ul class="players">${playerList}</ul>
+    </div>
+    <div class="panel">
+      <h3>ラウンド数</h3>
+      <div class="row">${roundOptions}</div>
+      ${host ? '' : '<p class="muted mt" style="font-size:.8rem">ホストが設定します</p>'}
+    </div>
+    <div class="panel stack">
+      ${host ? `<button class="btn-primary full" id="start" ${conn.length >= 2 ? '' : 'disabled'}>
+                  ゲーム開始 ${conn.length >= 2 ? '' : '(2人以上で開始可)'}
+                </button>` :
+                '<p class="center muted">ホストの開始を待っています…</p>'}
+      <button class="btn-ghost full" id="leave">退出</button>
+    </div>
+  `);
+
+  document.getElementById('roomcode').onclick = () => copyText(UI.roomCode);
+  document.getElementById('leave').onclick = leaveRoom;
+  if (host) {
+    document.getElementById('start').onclick = hostStartGame;
+    document.querySelectorAll('[data-rounds]').forEach(b => {
+      b.onclick = () => hostSetRounds(parseInt(b.dataset.rounds, 10));
+    });
+  }
+}
+
+/* --- キャラ選択 --- */
+function renderCharacterSelect() {
+  const room = UI.room;
+  const myP = me();
+  const conn = connectedPlayers(room);
+  const readyCount = conn.filter(([, p]) => p.characterReady).length;
+
+  // 既に確定済みなら待機表示
+  if (myP && myP.characterReady && myP.character) {
+    app.innerHTML = h(`
+      <div class="panel center">
+        <h2>キャラ確定済み</h2>
+        <div class="cards" style="grid-template-columns:1fr; max-width:260px; margin:0 auto;">
+          ${characterCardHTML(myP.character, '', false)}
+        </div>
+        <p class="progress mt">確定: ${readyCount}/${conn.length}人</p>
+        <div class="spinner"></div>
+        <p class="muted">全員の確定を待っています…</p>
+      </div>
+    `);
+    return;
+  }
+
+  const monthOpts = Array.from({ length: 12 }, (_, i) =>
+    `<option value="${i + 1}" ${UI.bdMonth === i + 1 ? 'selected' : ''}>${i + 1}月</option>`).join('');
+  const dayOpts = Array.from({ length: 31 }, (_, i) =>
+    `<option value="${i + 1}" ${UI.bdDay === i + 1 ? 'selected' : ''}>${i + 1}日</option>`).join('');
+
+  let resultsHTML = '';
+  if (UI.searchLoading) {
+    resultsHTML = '<div class="spinner"></div><p class="center muted">検索中…</p>';
+  } else if (UI.searchError) {
+    resultsHTML = `<div class="panel center">
+      <p class="error-box">${esc(UI.searchError)}</p>
+      <button class="btn-secondary" id="retry">再検索</button></div>`;
+  } else if (UI.searchResults) {
+    if (UI.searchResults.length === 0) {
+      resultsHTML = '<p class="center muted">該当者が見つかりませんでした。別の日付を試してください。</p>';
+    } else {
+      resultsHTML = `<div class="cards">${UI.searchResults.map((c, i) =>
+        characterCardHTML(c, '', UI.selectedCharacter && UI.selectedCharacter.title === c.title, i)
+      ).join('')}</div>`;
+    }
+  }
+
+  app.innerHTML = h(`
+    <div class="panel">
+      <h2>キャラを選ぼう</h2>
+      <p class="muted">あなたの誕生日生まれの有名人から選択します</p>
+      <div class="row">
+        <select id="month">${monthOpts}</select>
+        <select id="day">${dayOpts}</select>
+        <button class="btn-secondary" id="search" style="flex:0 0 90px;">検索</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span class="progress">確定: ${readyCount}/${conn.length}人</span>
+        ${UI.selectedCharacter ? '<button class="btn-primary" id="confirm">このキャラで決定</button>' : ''}
+      </div>
+      <div class="hr"></div>
+      ${resultsHTML}
+    </div>
+  `);
+
+  document.getElementById('month').onchange = (e) => UI.bdMonth = parseInt(e.target.value, 10);
+  document.getElementById('day').onchange = (e) => UI.bdDay = parseInt(e.target.value, 10);
+  document.getElementById('search').onclick = doSearch;
+  const retry = document.getElementById('retry');
+  if (retry) retry.onclick = doSearch;
+  const confirmBtn = document.getElementById('confirm');
+  if (confirmBtn) confirmBtn.onclick = () => confirmCharacter(UI.selectedCharacter);
+  document.querySelectorAll('[data-card]').forEach(el => {
+    el.onclick = () => {
+      UI.selectedCharacter = UI.searchResults[parseInt(el.dataset.card, 10)];
+      render();
+    };
+  });
+}
+
+async function doSearch() {
+  UI.searchLoading = true; UI.searchError = null; UI.searchResults = null; UI.selectedCharacter = null;
+  render();
+  try {
+    const people = await Wiki.fetchBirthdayPeople(UI.bdMonth, UI.bdDay);
+    UI.searchResults = people;
+  } catch (e) {
+    UI.searchError = 'Wikipediaの取得に失敗しました。ネットワークを確認して再検索してください。';
+  } finally {
+    UI.searchLoading = false;
+    render();
+  }
+}
+
+function characterCardHTML(c, ownerName, selected, idx) {
+  const thumb = c.thumbnail
+    ? `<img class="thumb" src="${esc(c.thumbnail)}" alt="" loading="lazy" />`
+    : `<div class="thumb">🎭</div>`;
+  return `
+    <button class="card ${selected ? 'selected' : ''}" ${idx != null ? `data-card="${idx}"` : ''}>
+      ${thumb}
+      <div class="body">
+        <div class="title">${esc(c.title)}</div>
+        <div class="desc">${esc(c.description)}</div>
+        ${ownerName ? `<div class="owner">${esc(ownerName)}</div>` : ''}
+      </div>
+    </button>`;
+}
+
+/* --- テーマ設定 --- */
+function renderThemeSetting() {
+  const host = isHost();
+  if (!host) {
+    app.innerHTML = h(`
+      <div class="panel center">
+        <h2>ラウンド ${UI.room.currentRound} / ${UI.room.totalRounds}</h2>
+        <div class="spinner"></div>
+        <p class="muted">ホストがお題を選んでいます…</p>
+      </div>`);
+    return;
+  }
+  const presets = PRESET_THEMES.map((t, i) =>
+    `<button class="${UI.selectedPreset === i ? 'selected' : ''}" data-preset="${i}">${esc(t)}</button>`).join('');
+
+  app.innerHTML = h(`
+    <div class="panel center">
+      <h2>ラウンド ${UI.room.currentRound} / ${UI.room.totalRounds}</h2>
+      <p class="muted">お題を決めてください</p>
+    </div>
+    <div class="panel stack">
+      <div>
+        <label>お題を直接入力 (最大30文字)</label>
+        <input type="text" id="themeInput" maxlength="30" value="${esc(UI.themeInput)}" placeholder="例: 一番宇宙に詳しそう" />
+      </div>
+      <div>
+        <label>プリセットから選ぶ</label>
+        <div class="preset-grid">${presets}</div>
+        <button class="btn-ghost mt" id="randomPreset" style="width:auto;">🎲 ランダム</button>
+      </div>
+      <button class="btn-primary full" id="startTheme">このテーマで開始</button>
+    </div>
+  `);
+
+  const themeInput = document.getElementById('themeInput');
+  themeInput.oninput = (e) => { UI.themeInput = e.target.value; UI.selectedPreset = null; };
+  document.querySelectorAll('[data-preset]').forEach(b => {
+    b.onclick = () => {
+      UI.selectedPreset = parseInt(b.dataset.preset, 10);
+      UI.themeInput = PRESET_THEMES[UI.selectedPreset];
+      render();
+    };
+  });
+  document.getElementById('randomPreset').onclick = () => {
+    UI.selectedPreset = Math.floor(Math.random() * PRESET_THEMES.length);
+    UI.themeInput = PRESET_THEMES[UI.selectedPreset];
+    render();
+  };
+  document.getElementById('startTheme').onclick = () => {
+    const theme = (UI.themeInput || '').trim();
+    if (!theme) { toast('お題を入力してください'); return; }
+    UI.themeInput = ''; UI.selectedPreset = null;
+    hostSetTheme(theme);
+  };
+}
+
+/* --- 投票 --- */
+function renderVoting() {
+  const room = UI.room;
+  const rk = roundKey(room.currentRound);
+  const round = (room.rounds && room.rounds[rk]) ? room.rounds[rk] : {};
+  const votes = round.votes || {};
+  const conn = connectedPlayers(room);
+  const votedCount = conn.filter(([id]) => votes[id]).length;
+  const myVote = votes[Session.playerID];
+
+  // 残り時間
+  const remain = round.endsAt ? Math.max(0, Math.ceil((round.endsAt - DB.now()) / 1000)) : ROUND_SECONDS;
+
+  // 投票先 = 自分以外のプレイヤー (V-01)
+  const targets = allPlayers(room).filter(([id, p]) => id !== Session.playerID && p.character);
+  const cards = targets.map(([id, p]) => {
+    const selected = (UI.selectedVote || myVote) === id;
+    return `<button class="card ${selected ? 'selected' : ''}" data-vote="${esc(id)}">
+      ${p.character.thumbnail ? `<img class="thumb" src="${esc(p.character.thumbnail)}" alt="" loading="lazy"/>` : '<div class="thumb">🎭</div>'}
+      <div class="body">
+        <div class="title">${esc(p.character.title)}</div>
+        <div class="owner">${esc(p.name)} の選択</div>
+      </div>
+    </button>`;
+  }).join('');
+
+  app.innerHTML = h(`
+    <div class="theme-banner">${esc(room.currentTheme)}</div>
+    <div class="panel">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span class="timer ${remain <= 10 ? 'warn' : ''}">⏱ ${remain}秒</span>
+        <span class="progress">${votedCount}/${conn.length}人 投票済</span>
+      </div>
+      <div class="hr"></div>
+      ${myVote ? '<p class="vote-count center">投票済み（締切まで変更可）</p>' : '<p class="muted center">誰が「' + esc(room.currentTheme) + '」か投票しよう</p>'}
+      <div class="cards">${cards}</div>
+      <button class="btn-primary full mt" id="vote" ${(UI.selectedVote || myVote) ? '' : 'disabled'}>
+        ${myVote ? '投票を変更する' : '投票する'}
+      </button>
+    </div>
+    ${isHost() ? '<p class="center muted" style="font-size:.75rem">あなたがホストです（集計を担当）</p>' : ''}
+  `);
+
+  document.querySelectorAll('[data-vote]').forEach(el => {
+    el.onclick = () => { UI.selectedVote = el.dataset.vote; render(); };
+  });
+  document.getElementById('vote').onclick = () => {
+    const target = UI.selectedVote || myVote;
+    if (target) { castVote(target); UI.selectedVote = null; }
+  };
+}
+
+/* --- ラウンド結果 --- */
+function renderRoundResult() {
+  const room = UI.room;
+  const rk = roundKey(room.currentRound);
+  const round = (room.rounds && room.rounds[rk]) ? room.rounds[rk] : {};
+  const results = round.results || {};
+  const votes = round.votes || {};
+
+  // 投票者名の逆引き
+  const votersByTarget = {};
+  for (const [voter, target] of Object.entries(votes)) {
+    if (!votersByTarget[target]) votersByTarget[target] = [];
+    const vp = room.players[voter];
+    votersByTarget[target].push(vp ? vp.name : '?');
+  }
+
+  const ranked = allPlayers(room)
+    .map(([id, p]) => ({ id, p, r: results[id] || { voteCount: 0, pointAwarded: false } }))
+    .sort((a, b) => b.r.voteCount - a.r.voteCount);
+
+  const rankHTML = ranked.map(({ id, p, r }) => `
+    <li class="${r.pointAwarded ? 'winner' : ''}">
+      ${p.character && p.character.thumbnail ? `<img class="thumb" src="${esc(p.character.thumbnail)}" alt=""/>` : '<div class="thumb">🎭</div>'}
+      <div class="meta">
+        <div style="font-weight:800">${r.pointAwarded ? '🏆 ' : ''}${esc(p.character ? p.character.title : '—')}</div>
+        <div class="muted" style="font-size:.8rem">${esc(p.name)}</div>
+        ${votersByTarget[id] ? `<div class="muted" style="font-size:.72rem">投票: ${esc(votersByTarget[id].join('、'))}</div>` : ''}
+      </div>
+      <div class="votes">${r.voteCount}票</div>
+    </li>`).join('');
+
+  const scoreHTML = allPlayers(room)
+    .map(([, p]) => p)
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .map(p => `<div class="srow"><span>${esc(p.name)}</span><span><b>${p.score || 0}</b> pt</span></div>`).join('');
+
+  const host = isHost();
+  const isLast = room.currentRound >= room.totalRounds;
+
+  app.innerHTML = h(`
+    <div class="theme-banner">${esc(round.theme || room.currentTheme)}</div>
+    <div class="panel">
+      <h3>ラウンド ${room.currentRound} 結果</h3>
+      <ul class="rank">${rankHTML}</ul>
+    </div>
+    <div class="panel">
+      <h3>スコアボード</h3>
+      <div class="scoreboard">${scoreHTML}</div>
+    </div>
+    ${host
+      ? `<button class="btn-primary full" id="next">${isLast ? '最終結果へ' : '次のラウンドへ'}</button>`
+      : '<p class="center muted">ホストの操作を待っています…</p>'}
+  `);
+
+  if (host) document.getElementById('next').onclick = hostNextRound;
+}
+
+/* --- 最終結果 --- */
+function renderFinal() {
+  const room = UI.room;
+  const ranked = allPlayers(room).map(([, p]) => p).sort((a, b) => (b.score || 0) - (a.score || 0));
+  const top = ranked[0];
+  const winners = ranked.filter(p => (p.score || 0) === (top ? top.score || 0 : 0));
+
+  const heroChar = top && top.character;
+  const heroHTML = heroChar && heroChar.thumbnail
+    ? `<img src="${esc(heroChar.thumbnail)}" alt=""/>`
+    : `<div class="ph" style="display:flex;align-items:center;justify-content:center;font-size:3rem;">🏆</div>`;
+
+  const listHTML = ranked.map((p, i) => `
+    <div class="srow">
+      <span>${i === 0 ? '👑 ' : (i + 1) + '位 '}${esc(p.name)}</span>
+      <span><b>${p.score || 0}</b> pt</span>
+    </div>`).join('');
+
+  const host = isHost();
+  app.innerHTML = h(`
+    <div class="panel winner-hero">
+      <h2>🎉 優勝 🎉</h2>
+      ${heroHTML}
+      <h1>${esc(winners.map(w => w.name).join(' & '))}</h1>
+      <p class="muted">${esc(top && top.character ? top.character.title : '')}</p>
+    </div>
+    <div class="panel">
+      <h3>最終スコア</h3>
+      <div class="scoreboard">${listHTML}</div>
+    </div>
+    <div class="panel stack">
+      ${host ? '<button class="btn-gold full" id="again">もう一度遊ぶ</button>'
+             : '<p class="center muted">ホストが次の操作を選びます</p>'}
+      <button class="btn-ghost full" id="toTop">ロビーに戻る</button>
+    </div>
+  `);
+
+  if (host) document.getElementById('again').onclick = hostPlayAgain;
+  document.getElementById('toTop').onclick = leaveRoom;
+}
+
+/* -------------------------------------------------------------------------
+ * 7. 共通 UI ヘルパー
+ * ----------------------------------------------------------------------- */
+let toastTimer = null;
+function toast(msg) {
+  let el = document.querySelector('.toast');
+  if (!el) { el = document.createElement('div'); el.className = 'toast'; document.body.appendChild(el); }
+  el.textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { if (el) el.remove(); }, 2600);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('コピーしました');
+  } catch {
+    toast(text);
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * 8. 起動
+ * ----------------------------------------------------------------------- */
+function boot() {
+  Session.ensurePlayerID();
+  // 既存セッション復帰はTOPの「戻る」導線から (自動入室はしない)
+  UI.screen = 'top';
+  render();
+}
+boot();
+
+// デバッグ用・テスト用にグローバル公開 (手動テスト S-01〜08 / 自動テスト §11 等)
+window.BB = {
+  DB, Wiki, UI, Session, BACKEND,
+  // 純粋ヘルパー / ホスト権威ロジック (test/game.test.js から検証)
+  helpers: { connectedPlayers, allPlayers, roundKey, isHost, me, genRoomCode },
+  host: {
+    maybeTally, maybeAdvanceFromCharacterSelect, checkStalePlayers,
+    migrateHost, electHostIfNeeded, hostSetTheme, hostNextRound, hostPlayAgain
+  },
+  rooms: { createRoom, joinRoom }
+};
+</script>
+</body>
+</html>
